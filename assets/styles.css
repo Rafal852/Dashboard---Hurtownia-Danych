@@ -1,0 +1,27 @@
+.Select-control {
+    background-color: #2f3542 !important;
+    color: #d5dbe0 !important;
+    border-color: #333 !important;
+}
+
+.VirtualizedSelectOption {
+    background-color: #2f3542 !important;
+    color: #d5dbe0 !important;
+}
+
+.Select-placeholder {
+    color: #d5dbe0 !important;
+}
+
+/* Add all possible selected value selectors */
+.Select-single-value,
+.Select__single-value,
+.Select-value,
+.Select-value-label {
+    color: #d5dbe0 !important;
+}
+
+.VirtualizedSelectOption:hover {
+    background-color: #444 !important;
+    color: #ffffff !important;
+}
