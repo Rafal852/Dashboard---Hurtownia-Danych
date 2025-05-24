@@ -4,15 +4,18 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from mlxtend.frequent_patterns import apriori, association_rules
+import pyodbc
+from sqlalchemy import create_engine
+import datetime
 
-df_clean = pd.read_excel('cleaned_data.xlsx', engine='openpyxl')
+#df_clean = pd.read_excel('cleaned_data.xlsx', engine='openpyxl')
 
-country_code_map = {
-    'Belgia': 'BEL', 'Niemcy': 'DEU', 'Holandia': 'NLD', 'Francja': 'FRA', 'Polska': 'POL',
-    'Usa': 'USA', 'Dania': 'DNK', 'Hiszpania': 'ESP', 'Szwajcaria': 'CHE', 'Wielka Brytania': 'GBR',
-    'Czechy': 'CZE', 'Brazylia': 'BRA', 'Szwecja': 'SWE', 'Słowacja': 'SVK', 'Rosja': 'RUS',
-    'Kanada': 'CAN', 'Portugalia': 'PRT', 'Argentyna': 'ARG'
-}
+engine = create_engine(
+    "mssql+pyodbc://sshrewds_SQLLogin_1:2vm9wmynr4@hd-wsb-2025-g5.mssql.somee.com/hd-wsb-2025-g5?driver=ODBC+Driver+17+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+)
+
+# Load view
+df_clean = pd.read_sql("SELECT * FROM [dbo].[VisualizationView]", engine)
 
 #Bootstrap Cyborg theme
 app = Dash(
@@ -131,10 +134,10 @@ app.layout = dbc.Container(fluid=True, style={"height": "100vh", "padding": "0"}
                         "borderRadius": "4px",  
                     }
             ),
-            dbc.Label("Kanał Sprzedaży:", style={"color": "#d5dbe0"}),
+            dbc.Label("Kanał sprzedaży:", style={"color": "#d5dbe0"}),
             dcc.Dropdown(
                 id='channel-dropdown',
-                options=[{'label': c, 'value': c} for c in df_clean['Kanał Sprzedaży'].unique()],
+                options=[{'label': c, 'value': c} for c in df_clean['Kanał sprzedaży'].unique()],
                 placeholder="Wszystkie",
                 className="mb-3",
                 style={
@@ -297,7 +300,15 @@ app.layout = dbc.Container(fluid=True, style={"height": "100vh", "padding": "0"}
     ])
 
 ], width={"size": 10, "offset": 2}, style={"padding": "32px", "backgroundColor": "#23252e", "minHeight": "100vh"})
-    ], style={"margin": "0"})
+    ], style={"margin": "0"}),
+
+    #Interval 30s:
+    dcc.Interval(
+        id='interval-component',
+        interval=30*1000,  
+        n_intervals=0
+    )
+    
 ])
 
 @app.callback([
@@ -318,14 +329,21 @@ app.layout = dbc.Container(fluid=True, style={"height": "100vh", "padding": "0"}
     Input('sales-category-dropdown', 'value'),
     Input('channel-dropdown', 'value'),
     Input('price-range-dropdown', 'value'),
-    Input('value-type-toggle', 'value')
+    Input('value-type-toggle', 'value'),
+    Input('interval-component', 'n_intervals')
 ])
-def update_dashboard(year, category, channel, price_range, is_brutto):
+def update_dashboard(year, category, channel, price_range, is_brutto, n_intervals):
+
+    print(f"Data refreshed from SQL at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    df_clean = pd.read_sql("SELECT * FROM [dbo].[VisualizationView]", engine)
+    
+
     df = df_clean.copy()
     
     if year: df = df[df['Rok'] == year]
     if category: df = df[df['Kategoria sprzedaży'] == category]
-    if channel: df = df[df['Kanał Sprzedaży'] == channel]
+    if channel: df = df[df['Kanał sprzedaży'] == channel]
     if price_range: df = df[df['Przedział cenowy'] == price_range]
     value_type = 'Sprzedaż (brutto)' if is_brutto else 'Sprzedaż (netto)'
 
@@ -345,11 +363,11 @@ def update_dashboard(year, category, channel, price_range, is_brutto):
     custom_colors = ['#1B9E77', '#D95F02', '#7570B3', '#E7298A', '#66A61E', '#E6AB02', '#A6761D', '#666666']
 
     #Top 3 Products
-    top5_brands = df.groupby('Kategoria Produktu')[value_type].sum().sort_values(ascending=False).head(3).reset_index()
+    top5_brands = df.groupby('Kategoria produktu')[value_type].sum().sort_values(ascending=False).head(3).reset_index()
     top5_fig = px.bar(
         top5_brands,
         x=value_type,
-        y='Kategoria Produktu',
+        y='Kategoria produktu',
         orientation='h',
         title="Top 3 Kategorii Produktu wg Sprzedaży",
         text_auto='.2s',
@@ -391,7 +409,7 @@ def update_dashboard(year, category, channel, price_range, is_brutto):
     #Line chart: Sales over months, grouped by year
     df_line = df_clean.copy()
     if category: df_line = df_line[df_line['Kategoria sprzedaży'] == category]
-    if channel: df_line = df_line[df_line['Kanał Sprzedaży'] == channel]
+    if channel: df_line = df_line[df_line['Kanał sprzedaży'] == channel]
     if price_range: df_line = df_line[df_line['Przedział cenowy'] == price_range]
     value_type_line = value_type
     line_df = df_line.groupby(['Rok', 'Miesiąc']).agg({
@@ -488,12 +506,12 @@ def update_dashboard(year, category, channel, price_range, is_brutto):
     brand_fig.update_layout(paper_bgcolor='#23252e', plot_bgcolor='#23252e', font_color='#d5dbe0')
 
     #Map
-    map_df = df.groupby('Kraj').agg({
+    map_df = df.groupby(['Kraj', 'Kod kraju']).agg({
         value_type: 'sum',
         'Ilość': 'sum',
         'VAT': 'sum'
     }).reset_index()
-    map_df['iso_alpha'] = map_df['Kraj'].map(country_code_map)
+    map_df['iso_alpha'] = map_df['Kod kraju']
     map_fig = px.choropleth(
         map_df, locations='iso_alpha', color=value_type, hover_name='Kraj',
         color_continuous_scale=px.colors.sequential.Viridis, projection='natural earth',
