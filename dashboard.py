@@ -11,7 +11,7 @@ import datetime
 #df_clean = pd.read_excel('cleaned_data.xlsx', engine='openpyxl')
 
 engine = create_engine(
-    "mssql+pyodbc://sshrewds_SQLLogin_1:2vm9wmynr4@hd-wsb-2025-g5.mssql.somee.com/hd-wsb-2025-g5?driver=ODBC+Driver+17+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+    ""
 )
 
 # Load view
